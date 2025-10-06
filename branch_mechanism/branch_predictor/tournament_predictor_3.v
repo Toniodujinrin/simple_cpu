@@ -27,16 +27,24 @@ module chooser(
     wire [1:0] bimodal_rank;
     wire [1:0] local_rank;
 
-    // Static priority values (higher = better)
+    // Correct → increment; wrong → decrement
+    wire gshare_rank_update;
+    wire bimodal_rank_update;
+    wire local_rank_update; 
+
+    // Static priority values for tie in ranks (higher = better)
     localparam GSHARE_PRIORITY = 2'd3;
     localparam LOCAL_PRIORITY  = 2'd2;
     localparam BIMODAL_PRIORITY= 2'd1;
 
-    // Correct → increment; wrong → decrement
-    wire gshare_rank_update  = (outcome == gshare_prediction);
-    wire bimodal_rank_update = (outcome == bimodal_prediction);
-    wire local_rank_update   = (outcome == local_prediction);
+   
 
+    assign gshare_rank_update = outcome == gshare_prediction; 
+    assign bimodal_rank_update = outcome == bimodal_prediction; 
+    assign local_rank_update = outcome == local_predictor; 
+
+
+    //saturated counter used for ranking system, MSB of saturated counter as effective rank 
     sat_counter_2bit GSHARE_RANKER(
         .clk(clk), .reset(reset),
         .enabled(update_en), .in(gshare_rank_update),

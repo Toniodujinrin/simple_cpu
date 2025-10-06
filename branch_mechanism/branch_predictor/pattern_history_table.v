@@ -1,11 +1,14 @@
-module pattern_history_table(clk, index_read, index_write, count, increment_decrement, reset, write_enabled); 
-	parameter INDEX_LEN = 10; 
+module pattern_history_table #(parameter INDEX_LEN = 10)  (
+	input [INDEX_LEN-1:0] index_read, 
+	input [INDEX_LEN-1:0] index_write, 
+	input increment_decrement, reset, write_enabled, clk, 
+	output [1:0] count
+); 
+
+
 	localparam TOTAL_COUNT_LEN = INDEX_LEN*2;
 	localparam LOCATIONS = 2**INDEX_LEN; 
-	input [INDEX_LEN-1:0] index_read; 
-	input [INDEX_LEN-1:0] index_write; 
-	input increment_decrement, reset, write_enabled, clk; 
-	output [1:0] count; 
+
 	
 	
 	 

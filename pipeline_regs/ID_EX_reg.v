@@ -13,6 +13,7 @@ module ID_EX_reg(
     input  wire [4:0]  ALU_options_in,  
     input  wire [1:0]  ctrl_WB_in, 
     input  wire        ctrl_MEM_read_in, ctrl_MEM_write_in, ctrl_EX_in, 
+    input  wire [15:0] imm_in, 
 
     output reg  [2:0]  rs1_addr_out, rs2_addr_out, rd_addr_out, 
     output reg  [15:0] rs1_data_out, rs2_data_out,
@@ -20,6 +21,7 @@ module ID_EX_reg(
     output reg  [1:0]  ctrl_WB_out, 
     output reg  [7:0]  ALU_OP_out, 
     output reg  [4:0]  ALU_options_out
+    output reg  [15:0] imm_out
 ); 
 
 always @(posedge clk or posedge reset) begin 
@@ -34,7 +36,8 @@ always @(posedge clk or posedge reset) begin
         ctrl_MEM_read_out  <= 1'b0; 
         ctrl_MEM_write_out <= 1'b0; 
         ctrl_EX_out        <= 1'b0; 
-        ctrl_WB_out        <= 2'b0; 
+        ctrl_WB_out        <= 2'b0;
+        imm_out            <= 16'b0;  
     end
     else if (write_enable) begin 
         rs1_addr_out       <= rs1_addr_in; 
@@ -48,6 +51,7 @@ always @(posedge clk or posedge reset) begin
         ctrl_MEM_write_out <= ctrl_MEM_write_in; 
         ctrl_EX_out        <= ctrl_EX_in; 
         ctrl_WB_out        <= ctrl_WB_in; 
+        imm_out            <= imm_in; 
     end 
 end 
 

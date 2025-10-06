@@ -70,8 +70,8 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
 	 // IO 
     input  clk, set_selected_read, set_selected_write, reset; 
     input  [TAG_LEN-1:0] tag_in_read, tag_in_write;
-	 input  [ADDRESS_LEN-1:0] address_in; 
-	 output [ADDRESS_LEN-1:0] target_address; 
+	input  [ADDRESS_LEN-1:0] address_in; 
+	output [ADDRESS_LEN-1:0] target_address; 
     output tag_not_added; 
 	 
 	 wire tag_not_added_read; 
@@ -81,28 +81,28 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
     wire [TAG_LEN-1:0] tag_out [0:WAY_N-1];
 	 
 	 
-	 wire [ADDRESS_LEN-1:0] address_out [0:WAY_N-1]; 
+	wire [ADDRESS_LEN-1:0] address_out [0:WAY_N-1]; 
     wire       valid   [0:WAY_N-1];
-	 wire 		hit_read    [0:WAY_N-1]; 
-	 wire       hit_write   [0:WAY_N-1]; 
-	 wire       update_way [0:WAY_N-1]; 
+	wire 		hit_read    [0:WAY_N-1]; 
+	wire       hit_write   [0:WAY_N-1]; 
+	wire       update_way [0:WAY_N-1]; 
 
-	 ///////////////////////////////
+	///////////////////////////////
     // Hit detect (only if valid)
-	 //////////////////////////////
-	 // Hit detect for read
+	//////////////////////////////
+    // Hit detect for read
     assign hit_read[0] = set_selected_read && valid[0] && (tag_out[0] == tag_in_read);
     assign hit_read[1] = set_selected_read && valid[1] && (tag_out[1] == tag_in_read);
 	 
-	 //Hit detect for write 
-	 assign hit_write[0] = set_selected_write && valid[0] && (tag_out[0] == tag_in_write); 
-	 assign hit_write[1] = set_selected_write && valid[1] && (tag_out[1] == tag_in_write); 
+	//Hit detect for write 
+	assign hit_write[0] = set_selected_write && valid[0] && (tag_out[0] == tag_in_write); 
+	assign hit_write[1] = set_selected_write && valid[1] && (tag_out[1] == tag_in_write); 
 
 	
-	 /////////////////////////////
+	/////////////////////////////
     // Miss / not-added (tag is said to be not found if the set was selected and both ways do not have the tag (miss))
-	 ////////////////////////////
-	 // Target not added for read request 
+	////////////////////////////
+	// Target not added for read request 
     assign tag_not_added_read = set_selected_read && !(hit_read[0] || hit_read[1]);   
 	  
 	 // Target not added for write request 
@@ -128,11 +128,11 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
                           choose_way1_invalid ||
                           (!choose_way0_invalid && !choose_way1_invalid && (plru_bit == 1'b1))
                         );
-	 ////////////////////////////
-	 // PLRU update:
-	 ////////////////////////////
-	 //  - PLRU is updated on either read or write hit. It should check for general access (read or write) when deciding the MRU or LRU. 
-	 //  - If one "way" is written to and the other "way" is read from, PLRU state is unchanged 
+	////////////////////////////
+	// PLRU update:
+	////////////////////////////
+	//  - PLRU is updated on either read or write hit. It should check for general access (read or write) when deciding the MRU or LRU. 
+	//  - If one "way" is written to and the other "way" is read from, PLRU state is unchanged 
     //  - On a hit, point PLRU to the *other* way (the hit way becomes MRU).
     //  - On a replacement, set PLRU away from the just-filled way (filled way becomes MRU).
     always @(posedge clk or posedge reset) begin
@@ -163,9 +163,9 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
 	 //////////////////////////////////////
     // Assign count. default to 2'b01 if not tag is found, and also raise tag_not_found flag
     assign target_address = hit_read[0] ? address_out[0] : hit_read[1]? address_out[1]: 16'b0;
-	 assign tag_not_added = tag_not_added_read; 
-	 assign update_way[0] =  hit_write[0] && write_enabled && (address_in != address_out[0]); 
-	 assign update_way[1] =  hit_write[1] && write_enabled && (address_in != address_out[1]); 
+	assign tag_not_added = tag_not_added_read; 
+	assign update_way[0] =  hit_write[0] && write_enabled && (address_in != address_out[0]); 
+	assign update_way[1] =  hit_write[1] && write_enabled && (address_in != address_out[1]); 
 
     // Ways
     way#(.ADDRESS_LEN(ADDRESS_LEN), .TAG_LEN(TAG_LEN)) WAY0 (

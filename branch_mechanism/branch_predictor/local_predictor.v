@@ -1,14 +1,35 @@
-module local_predictor(clk, reset, pc_bits, update_en, outcome, prediction); 
-	input clk, reset, update_en, outcome; 
-	input [6:0] pc_bits; 
-	output prediction; 
+module local_predictor(
+	input clk, reset, write_enabled, outcome,
+	input [6:0] pc_bits_read, 
+	input [6:0] pc_bits_write, 
+	output prediction
+); 
 
-	wire [9:0] history;
+	wire [9:0] history_read;
+	wire [9:0] history_write; 
 	wire [1:0] count; 
 	
 	assign prediction = count[1]; 
-	
-	pattern_history_table  PHT(.clk(clk), .index(history), .count(count), .increment_decrement(outcome), .reset(reset), .read_only(~update_en));
-	logical_history_table  LHT(.clk(clk), .taken_not_taken(outcome), .pc_bits(pc_bits), .reset(reset), .history(history), .read_only(~update_en));
+	 
+	pattern_history_table  PHT(
+		.clk(clk),
+		.index_read(history_read), 
+		.index_write(history_write), 
+		.count(count), 
+		.increment_decrement(outcome), 
+		.reset(reset), 
+		.write_enabled(write_enabled)
+	);
+
+
+	logical_history_table  LHT(
+		.clk(clk), 
+		.taken_not_taken(outcome), 
+		.pc_bits_read(pc_bits_read), 
+		.pc_bits_write(pc_bits_write), 
+		.reset(reset), .history_read(history_read), 
+		.history_write(history_write) , 
+		.write_enabled(write_enabled)
+	);
 
 endmodule 

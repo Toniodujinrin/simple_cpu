@@ -13,6 +13,22 @@ module gshare_predictor(clk, reset, update_en, pc_bits_read, pc_bits_write, hist
 	wire out_bit; //not used
 	assign prediction = count[1]; 
 	
-	shift_reg_n#(.WIDTH(HISTORY_LEN))                HISTORY_REG(.clk(clk),.in(outcome), .out(out_bit), .value(history_read), .reset(reset), .enabled(update_en)); 
-	pattern_history_table#(.INDEX_LEN(HISTORY_LEN))  COUNTER_FILE(.clk(clk) , .index_read(index_read), index_write(index_write), .count(count), .increment_decrement(outcome), .reset(reset), .write_enabled(update_en)); 
+	shift_reg_n#(.WIDTH(HISTORY_LEN)) HISTORY_REG(
+		.clk(clk),
+		.in(outcome), 
+		.out(out_bit), 
+		.value(history_read), 
+		.reset(reset), 
+		.enabled(update_en)
+		);
+
+	pattern_history_table#(.INDEX_LEN(HISTORY_LEN))  COUNTER_FILE(
+		.clk(clk) ,
+		.index_read(index_read), 
+		.index_write(index_write), 
+		.count(count), 
+		.increment_decrement(outcome), 
+		.reset(reset), 
+		.write_enabled(update_en)
+	); 
 endmodule 
