@@ -27,7 +27,7 @@ endmodule
 
 //extensible reg_mux  
 module reg_mux (in, select, out);
-	 parameter REG_N = 8; 
+	parameter REG_N = 8; 
     parameter WIDTH = 16; 
     input  [(REG_N*WIDTH)-1:0] in; 
     input  [$clog2(REG_N)-1:0] select;   

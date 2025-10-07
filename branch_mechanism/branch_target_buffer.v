@@ -63,9 +63,9 @@ endmodule
 module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in_write, tag_not_added, reset, target_address, address_in, write_enabled);
 	 // PARAMS 
     parameter WAY_N = 2; // must be 2 in this module
-	 parameter ADDRESS_LEN = 16; 
-	 parameter TAG_LEN = 8; 
-	 localparam PLRU_DEFAULT = 1'b0; 
+	parameter ADDRESS_LEN = 16; 
+	parameter TAG_LEN = 8; 
+	localparam PLRU_DEFAULT = 1'b0; 
 	 
 	 // IO 
     input  clk, set_selected_read, set_selected_write, reset; 
@@ -185,8 +185,8 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
         .replacement_mode((replace_way1 & write_enabled) | update_way[1]), //condition explanation: if write is enabled AND the tag is not yet recorded (and this is the appropriate "way" to be replaced) OR you want to update the value of the tag
         .tag_in(tag_in_write),
         .tag_out(tag_out[1]),
-		  .address_in(address_in),
-		  .address_out(address_out[1]), 
+		.address_in(address_in),
+		.address_out(address_out[1]), 
         .valid(valid[1]),
     );
 
@@ -194,12 +194,12 @@ endmodule
 
 
 module way(clk, replacement_mode, global_reset, address_in, address_out, tag_in, tag_out, valid);
-	 parameter TAG_LEN = 8; 
-	 parameter ADDRESS_LEN = 16; 
-	 input clk, replacement_mode, global_reset; //signal bits and clk 
-	 input [ADDRESS_LEN-1:0] address_in; 
-	 output [ADDRESS_LEN-1:0] address_out; 
-	 input  [TAG_LEN-1:0] tag_in; 
+	parameter TAG_LEN = 8; 
+	parameter ADDRESS_LEN = 16; 
+	input clk, replacement_mode, global_reset; //signal bits and clk 
+	input [ADDRESS_LEN-1:0] address_in; 
+	output [ADDRESS_LEN-1:0] address_out; 
+	input  [TAG_LEN-1:0] tag_in; 
     output [TAG_LEN-1:0] tag_out; 
     output reg   valid; //valid bit to indicate if the contents of the way is valid. Default set to 0 when module is initialized
 	 
@@ -216,7 +216,7 @@ module way(clk, replacement_mode, global_reset, address_in, address_out, tag_in,
     // Address register:
     // Written only on replacement 
 
-	  register #(.WIDTH(ADDRESS_LEN)) ADD_REG (
+	register #(.WIDTH(ADDRESS_LEN)) ADD_REG (
         .clk(clk),
         .in(address_in),
         .out(address_out),

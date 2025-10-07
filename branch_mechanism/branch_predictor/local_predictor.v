@@ -1,7 +1,6 @@
 module local_predictor(
 	input clk, reset, write_enabled, outcome,
-	input [6:0] pc_bits_read, 
-	input [6:0] pc_bits_write, 
+	input [15:0] pc_bits_read, pc_bits_write, 
 	output prediction
 ); 
 
@@ -25,8 +24,8 @@ module local_predictor(
 	logical_history_table  LHT(
 		.clk(clk), 
 		.taken_not_taken(outcome), 
-		.pc_bits_read(pc_bits_read), 
-		.pc_bits_write(pc_bits_write), 
+		.pc_bits_read(pc_bits_read[8:2]), 
+		.pc_bits_write(pc_bits_write[8:2]), 
 		.reset(reset), .history_read(history_read), 
 		.history_write(history_write) , 
 		.write_enabled(write_enabled)
