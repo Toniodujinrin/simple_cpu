@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        immediate_generator.v
+// Author:      Toni Odujinrin
+// Date:        2025-10-04 
+// Description: Immediate Value Generator
+///////////////////////////////////////////////////////////////////////////////
+
 module immediate_generator (
     input  wire [15:0] instruction, 
     output reg  [15:0] immediate_16bit
@@ -6,7 +13,7 @@ module immediate_generator (
     wire [1:0] cls = instruction[15:14];
     wire [1:0] cls00_opcode = instruction[13:12];  // for LDR/STR vs ADDI/SUBI
     wire [2:0] cls10_opcode = instruction[13:11];  // for branch vs compare
-	 wire cls10_opt = instruction[0]; //opt bit for branch/compare
+	wire cls10_opt = instruction[0]; //opt bit for branch/compare
 
     // Immediate slices
     wire [5:0]  imm6  = instruction[5:0];
