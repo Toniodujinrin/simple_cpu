@@ -14,7 +14,7 @@ module bimodal_predictor #(parameter INDEX_LEN =7, parameter TAG_LEN = 7 )(
 	
 	assign prediction = tag_not_added? 1'b0 : count[1]; 
 	
-	branch_history_table   BHT(
+	branch_history_table #(.INDEX_LEN(INDEX_LEN), .TAG_LEN(TAG_LEN))   BHT(
 		.clk(clk), 
 		.increment_decrement(outcome), 
 		.tag_bits_read(tag_read), 

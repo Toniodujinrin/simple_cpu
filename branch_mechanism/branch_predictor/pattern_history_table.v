@@ -5,9 +5,9 @@ module pattern_history_table #(parameter INDEX_LEN = 10)  (
 	output [1:0] count
 ); 
 
-
-	localparam TOTAL_COUNT_LEN = INDEX_LEN*2;
 	localparam LOCATIONS = 2**INDEX_LEN; 
+	localparam TOTAL_COUNT_LEN = LOCATIONS*2;
+	
 
 	
 	

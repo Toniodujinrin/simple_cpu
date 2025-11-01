@@ -1,17 +1,15 @@
-module local_history_table #(parameter INDEX_LEN = 7, 
-parameter HISTORY_LEN = 10)
+module local_history_table #(parameter INDEX_LEN = 7, HISTORY_LEN = 10)
 (
 	input clk, prediction, reset, rollback_enabled, predict_enable, 
 	input [INDEX_LEN-1:0] pc_bits_read, 
 	input [INDEX_LEN-1:0] pc_bits_write,
 	input [HISTORY_LEN-1:0] history_write 
-
 	output [HISTORY_LEN-1:0] history_read, 
 ); 
 	 
 
 
-	localparam LOCATIONS = 2**INDEX_LEN, 
+	localparam LOCATIONS = 2**INDEX_LEN; 
 	localparam VALUE_WIRES_LENGTH = HISTORY_LEN*LOCATIONS; 
 	
 	wire [LOCATIONS-1:0] out_bits; //not used 
@@ -52,7 +50,7 @@ parameter HISTORY_LEN = 10)
 					.value(values[i*HISTORY_LEN +: HISTORY_LEN]), 
 					.reset(reset), 
 					.p_load_enabled(history_select_write[i] && rollback_enabled), 
-					.load(history_write)
+					.load(history_write), 
 					.shift_enabled(history_select_read[i] && ~rollback_enabled && predict_enable)
 				);
 			end
