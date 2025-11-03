@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        local_predictor.v
+// Author:      Toni Odujinrin
+// Date:        2025-11-02 
+// Description: Local Predictor Module
+///////////////////////////////////////////////////////////////////////////////
+
+
 module local_predictor #(
     parameter HISTORY_LEN = 10,
     parameter INDEX_LEN   = 7
@@ -21,7 +29,7 @@ module local_predictor #(
     assign prediction = count[1];
     assign history_read_out = history_read;
 
-    // PHT indexed by local history
+
     pattern_history_table #(.INDEX_LEN(HISTORY_LEN)) PHT (
         .clk(clk),
         .index_read(history_read),
@@ -32,7 +40,7 @@ module local_predictor #(
         .write_enabled(write_enabled)
     );
 
-    // Local history table mapping PC -> history register
+    
     local_history_table #(.HISTORY_LEN(HISTORY_LEN), .INDEX_LEN(INDEX_LEN)) LHT (
         .clk(clk),
         .prediction(prediction),

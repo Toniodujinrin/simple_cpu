@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:       	bimodal_predictor.v
+// Author:      Toni Odujinrin
+// Date:        2025-10-04 
+// Description: Bimodal Predictor Module
+///////////////////////////////////////////////////////////////////////////////
+
+
 module bimodal_predictor #(parameter INDEX_LEN =7, parameter TAG_LEN = 7 )( 
 	input clk, reset, write_enabled, outcome, 
 	input [15:0] pc_bits_read, pc_bits_write,

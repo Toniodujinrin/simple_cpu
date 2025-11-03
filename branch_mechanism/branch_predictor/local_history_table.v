@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        local_history_table.v
+// Author:      Toni Odujinrin
+// Date:        2025-10-04 
+// Description: Local History Table
+///////////////////////////////////////////////////////////////////////////////
+
+
 module local_history_table #(parameter INDEX_LEN = 7, HISTORY_LEN = 10)
 (
 	input clk, prediction, reset, rollback_enabled, predict_enable, 

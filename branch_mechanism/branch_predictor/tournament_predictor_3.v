@@ -1,9 +1,17 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        tournament_predictor_3.v
+// Author:      Toni Odujinrin
+// Date:        2025-11-02 
+// Description: Hybrid (G-share, Bimodal, Local) Tournament Predictor Module
+///////////////////////////////////////////////////////////////////////////////
+
+
 module tournament_predictor_3 #(
     parameter GLOBAL_HISTORY_LEN = 8,
     parameter LOCAL_HISTORY_LEN  = 10,
-    parameter LP_INDEX_LEN      = 7,
-    parameter BP_INDEX_LEN      = 7,
-    parameter BP_TAG_LEN        = 7
+    parameter LP_INDEX_LEN       = 7,
+    parameter BP_INDEX_LEN       = 7,
+    parameter BP_TAG_LEN         = 7
 ) (
     input  wire clk,
     input  wire reset,
@@ -31,7 +39,7 @@ module tournament_predictor_3 #(
     reg gshare_rollback_enabled;
     reg local_rollback_enabled;
 
-    // update logic (simple always block setting enables/rollback)
+    // update logic 
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             gshare_rollback_enabled <= 1'b0;
@@ -54,7 +62,7 @@ module tournament_predictor_3 #(
         end
     end
 
-    // GSHARE instantiation (named ports to match gshare_predictor)
+    // GSHARE instantiation
     gshare_predictor #(.HISTORY_LEN(GLOBAL_HISTORY_LEN)) GSHARE (
         .pc_bits_read(pc_bits_read),
         .pc_bits_write(pc_bits_write),
@@ -80,7 +88,7 @@ module tournament_predictor_3 #(
         .prediction(bimodal_prediction)
     );
 
-    // LOCAL predictor instantiation (use correct parameter names and port separators)
+    // LOCAL predictor instantiation
     local_predictor #(.HISTORY_LEN(LOCAL_HISTORY_LEN), .INDEX_LEN(LP_INDEX_LEN)) LOCAL (
         .clk(clk),
         .reset(reset),

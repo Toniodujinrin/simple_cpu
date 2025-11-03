@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        branch_history_table.v 
+// Author:      Toni Odujinrin
+// Date:        2025-11-02 
+// Description: Branch History Table for bimodal predictor
+///////////////////////////////////////////////////////////////////////////////
+
+
 module branch_history_table #(parameter INDEX_LEN = 7, parameter TAG_LEN = 7) (
     input [TAG_LEN-1:0] tag_bits_read,
     input [TAG_LEN-1:0] tag_bits_write,  

@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        chooser.v
+// Author:      Toni Odujinrin
+// Date:        2025-11-02 
+// Description: Chooser module, selects a single predictor from either g-share, bimodal or local predictors 
+///////////////////////////////////////////////////////////////////////////////
+
+
 module chooser(
     input  wire clk,
     input  wire reset,

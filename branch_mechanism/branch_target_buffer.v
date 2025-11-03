@@ -1,3 +1,11 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        branch_target_buffer.v
+// Author:      Toni Odujinrin
+// Date:        2025-10-04 
+// Description: Branch target Buffer 
+///////////////////////////////////////////////////////////////////////////////
+
+
 module branch_target_buffer(clk, pc_bits_read, pc_bits_write, target_address_out, target_address_in, miss, write_enabled, reset); 
 	parameter INDEX_LEN = 7; 
 	localparam LOCATIONS = 2**INDEX_LEN;
@@ -105,15 +113,15 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
 	// Target not added for read request 
     assign tag_not_added_read = set_selected_read && !(hit_read[0] || hit_read[1]);   
 	  
-	 // Target not added for write request 
-	 assign tag_not_added_write = set_selected_write && !(hit_write[0] || hit_write[1]);
+	// Target not added for write request 
+	assign tag_not_added_write = set_selected_write && !(hit_write[0] || hit_write[1]);
 	 
 	 
 	 /////////////////////////////
 	 // Replacement Policy
 	 ////////////////////////////
 	 
-	 reg plru_bit;  // 0 = way0 was LRU, replace way0; 1 = way1 was LRU
+	reg plru_bit;  // 0 = way0 was LRU, replace way0; 1 = way1 was LRU
 
     // Check if the way is valid , only use write signals because replacement is only relevant when writing, not reading 
 	 wire choose_way0_invalid = tag_not_added_write && set_selected_write && !valid[0];
@@ -133,7 +141,7 @@ module set_2_way(clk, set_selected_read, set_selected_write, tag_in_read, tag_in
 	////////////////////////////
 	//  - PLRU is updated on either read or write hit. It should check for general access (read or write) when deciding the MRU or LRU. 
 	//  - If one "way" is written to and the other "way" is read from, PLRU state is unchanged 
-    //  - On a hit, point PLRU to the *other* way (the hit way becomes MRU).
+    //  - On a hit, point PLRU to the other(LRU) way (the hit way becomes MRU).
     //  - On a replacement, set PLRU away from the just-filled way (filled way becomes MRU).
     always @(posedge clk or posedge reset) begin
         if (reset) 

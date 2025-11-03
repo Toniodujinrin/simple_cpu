@@ -1,3 +1,10 @@
+///////////////////////////////////////////////////////////////////////////////
+// File:        pattern_history_table.v 
+// Author:      Toni Odujinrin
+// Date:        2025-10-04 
+// Description: Pattern History Table
+///////////////////////////////////////////////////////////////////////////////
+
 module pattern_history_table #(parameter INDEX_LEN = 10)  (
 	input [INDEX_LEN-1:0] index_read, 
 	input [INDEX_LEN-1:0] index_write, 
