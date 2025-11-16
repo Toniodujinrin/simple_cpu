@@ -2,76 +2,234 @@
 // File:        ID_EX_reg.v
 // Author:      Toni Odujinrin
 // Date:        2025-11-02 
-// Description: 4-way set associative cache with write-back, write-allocate policy  
+// Description: 4-way set associative cache + controller with write-back, write-allocate policy  
 ///////////////////////////////////////////////////////////////////////////////
 
+
+module cache_controller #( 
+    parameter
+        BLOCK_SIZE = 8,  
+        WORD_WIDTH = 16, 
+        ADDR_WIDTH = 16, 
+        WORD_OFFSET_WIDTH = 3,  
+        TAG_WIDTH = 4, 
+        SET_INDEX_SIZE = 8, 
+        WB_BUFFER_SIZE = 4 
+)
+(
+    localparam DATA_WIDTH = BLOCK_SIZE*WORD_WIDTH; 
+    input clk, reset, 
+
+    //controller <=> cpu  
+    input [ADDR_WIDTH-1:0] cpu_addr_in, 
+    input cpu_req_type, //read = 0, write = 1 
+    input cpu_req_ready, //indicates the cpu request data is ready and valid
+    input [WORD_WIDTH-1:0] cpu_data_in, //write data from CPU
+    input cpu_req_valid, //request is valid 
+    output [WORD_WIDTH-1:0] cpu_data_out,  //read data to cpu
+    output cpu_data_ready,  //indicates data going to the cpu is ready
+    output cpu_stall_req, //requests that the cpu should stall 
+
+
+    //controller <=> main store
+    input  [7:0] mem_data_in, //read data from memory
+    output mem_write_enable, mem_read_enable,  
+    output [ADDR_WIDTH-1:0] mem_addr, 
+    output [7:0] mem_data_out,  //write data to memory 
+    output mem_data_ready, //indicates that data going into the memory is ready. 
+    input mem_ack //memory has acknowledged data transfer
+); 
+
+
+    //controller <=> cache
+    reg [WORD_OFFSET_WIDTH-1:0] cache_word_offset;   
+    reg [SET_INDEX_SIZE-1:0] cache_set_index;
+    reg [TAG_WIDTH-1:0] cache_tag_bits; 
+    reg cache_write_enabled; 
+    reg [WORD_WIDTH-1:0] cache_write_data_word; 
+    reg [DATA_WIDTH-1:0] cache_write_data_block; 
+    reg cache_replace_request; 
+    wire [DATA_WIDTH-1:0] cache_evict_data
+    wire [TAG_WIDTH-1:0] cache_evict_tag; 
+    wire cache_evict_dirty, cache_evict_flag; 
+    wire [WORD_WIDTH-1:0] cache_read_data_word; 
+    wire cache_miss; 
+     
+
+    //controller <=> memory-block-buffer
+    wire [DATA_WIDTH-1:0] mbb_block_out;
+    reg mbb_reset; 
+    reg mbb_byte_offset; 
+    reg mbb_byte_in; 
+    reg mbb_mem_data_ready; 
+    wire mbb_buffer_full, mbb_buffer_empty; 
+    wire mbb_data_ready; 
+
+
+    //controller <=> write-back-buffer 
+    reg wbb_write_request; 
+    reg [DATA_WIDTH-1:0] wbb_block_in; 
+    reg wbb_block_dirty; 
+    reg [INDEX_WIDTH-1:0] wbb_block_index; 
+    reg [TAG_WIDTH-1:0] wbb_tag_in; 
+    reg wbb_write_request; 
+    wire wbb_buffer_full, wbb_buffer_empty;  
+    reg wbb_evict_ready; //indicates that main store is ready to recieve data
+    wire wbb_evict_valid; //indicates that the data from the WBB is ready to be put into the main store 
+    wire [7:0] wbb_byte_out; 
+    wire [ADDR_WIDTH-1:0] wbb_addr_out; 
+
+
+    //module instantiation (buffers and cache)
+    block_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_WIDTH(WORD_WIDTH))  
+    MB_BUFFER(
+        .clk(clk), 
+        .reset(mbb_reset), 
+        .mem_data_ready(mbb_mem_data_ready), 
+        .byte_offset(mbb_byte_offset), 
+        .byte_in(mbb_byte_in), 
+        .block_out(mbb_block_out), 
+        .buffer_full(mbb_buffer_full), 
+        .buffer_empty(mbb_buffer_empty), 
+        .data_ready(mbb_data_ready)
+    ); 
+
+
+    write_back_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_WIDTH(WORD_WIDTH), .BUFFER_SIZE(WB_BUFFER_SIZE), .ADDR_WIDTH(ADDR_WIDTH), .INDEX_SIZE(SET_INDEX_SIZE), .TAG_WIDTH(TAG_WIDTH)) 
+    WB_BUFFER(
+        .clk(clk), 
+        .reset(reset),
+        .write_request(wbb_write_request), 
+        .block_in(wbb_block_in), 
+        .block_dirty_in(wbb_block_dirty), 
+        .block_index_in(wbb_block_index), 
+        .block_tag_in(wbb_tag_in), 
+        .byte_out(wbb_byte_out), 
+        .addr_out(wbb_addr_out), 
+        .evict_valid(wbb_evict_valid), 
+        .evict_ready(wbb_evict_ready), 
+        .buffer_empty(wbb_buffer_empty), 
+        .buffer_full(wbb_buffer_full)
+    ); 
+
+    cache #(.BLOCK_SIZE(BLOCK_SIZE), .INDEX_WIDTH(SET_INDEX_SIZE), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH))
+    CACHE(
+        .clk(clk), 
+        .reset(reset), 
+        .write_enabled(cache_write_enabled), 
+        .replace_request(cache_replace_request), 
+        .set_index(cache_set_index), 
+        .input_tag(cache_tag_bits), 
+        .write_data_word(cache_write_data_word), 
+        .write_data_block(cache_write_data_block), 
+        .word_offset(cache_word_offset), 
+        .read_data_word(cache_read_data_word), 
+        .evicted_data_block(cache_evict_data), 
+        .evict_tag(cache_evict_data), 
+        .evict_flag(cache_evict_flag), 
+        .evict_dirty(cache_evict_dirty), 
+        .miss(cache_miss)
+    ); 
+
+
+
+    //control logic 
+
+    always @(posedge clk, posedge reset)
+    begin 
+
+
+    end 
+endmodule
+
+
+    // //assignments 
+    // assign block_offset = cpu_addr_in[3:1]; 
+    // assign word_offset = cpu_addr_in[0]; 
+    // assign set_index = cpu_addr_in[11:4]; 
+    // assign tag_bits = cpu_addr_in[15:12]; 
+
+
 module block_buffer #(
-    parameter BLOCK_SIZE = 8,
-    parameter WORD_SIZE  = 16
-) (
-    input  wire                       clk,
-    input  wire                       flush_buffer,
-    input  wire                       write_request, //signal from the main memory indicating that the data is available
-    input  wire [WORD_SIZE-1:0]       word_in,
-    output reg  [(BLOCK_SIZE*WORD_SIZE)-1:0] block_out,
-    output reg                        buffer_full,
-    output reg                        buffer_empty, 
-    output reg                        data_ready
+    parameter BLOCK_SIZE = 8,       // number of 16-bit words
+    parameter WORD_WIDTH = 16
+)(
+    input  wire clk,
+    input  wire reset,
+    input  wire mem_data_ready,     // byte is available
+    input  wire byte_offset,        // 0 = low byte, 1 = high byte
+    input  wire [7:0] byte_in,      // incoming byte
+    output reg  [BLOCK_SIZE*WORD_WIDTH-1:0] block_out,
+    output reg  buffer_full,
+    output reg  buffer_empty,
+    output reg  data_ready //block is ready for the cache 
 );
+    reg [$clog2(BLOCK_SIZE)-1:0] word_ptr;  
+    reg byte_ptr; 
 
-
-    reg [$clog2(BLOCK_SIZE)-1:0] pointer;
-
-    // On flush_buffer (async) clear state; on clock collect words into block_out
-    always @(posedge clk or posedge flush_buffer) begin
-        if (flush_buffer) begin
-            block_out    <= {(BLOCK_SIZE*WORD_SIZE){1'b0}};
-            pointer      <= {($clog2(BLOCK_SIZE)){1'b0}};
-            buffer_empty <= 1'b1;
-            buffer_full  <= 1'b0;
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            block_out    <= {(BLOCK_SIZE*WORD_WIDTH){1'b0}};
+            word_ptr     <= 0;
+            byte_ptr     <= 0;
+            buffer_empty <= 1;
+            buffer_full  <= 0;
+            data_ready   <= 0;
         end else begin
-            if (!buffer_full & write_request) begin
-                block_out[pointer*WORD_SIZE +: WORD_SIZE] <= word_in;
-                pointer <= pointer + 1'b1;
-                buffer_empty <= 1'b0;
+            data_ready <= 0;
 
-                
-                if (pointer == (BLOCK_SIZE - 1)) 
-                begin
-                    buffer_full <= 1'b1;
-                    data_ready <= 1; 
+            if (!buffer_full && mem_data_ready) begin
+                integer base;
+                base = word_ptr * WORD_WIDTH;
+
+                // Write the byte into the correct half of the word
+                if (byte_offset == 1'b0) begin
+                    block_out[base + 7 : base + 0] <= byte_in;
+                end else begin
+                    block_out[base + 15 : base + 8] <= byte_in;
+                end
+
+                // Update byte pointer
+                if (byte_ptr == 1'b0) begin
+                    byte_ptr <= 1'b1;
+                end else begin
+                    byte_ptr <= 1'b0;
+                    word_ptr <= word_ptr + 1'b1;
+
+                    if (word_ptr == BLOCK_SIZE-1) begin
+                        buffer_full <= 1'b1;
+                        data_ready  <= 1'b1;
+                    end
+                    buffer_empty <= 1'b0;
                 end
             end
         end
     end
-
-endmodule 
-
+endmodule
 
 module write_back_buffer #(
     parameter integer BLOCK_SIZE  = 8,   
-    parameter integer WORD_SIZE   = 16,  
+    parameter integer WORD_WIDTH  = 16,  
     parameter integer BUFFER_SIZE = 4,
-    parameter integer ADDR_SIZE   = 16,  
+    parameter integer ADDR_WIDTH   = 16,  
     parameter integer INDEX_SIZE  = 8,
-    parameter integer TAG_SIZE    = 4
+    parameter integer TAG_WIDTH    = 4
 )(
     input  wire  clk,reset,
 
     // enqueue entire block from cache
-    input  wire                         write_request,
-    input  wire [BLOCK_SIZE*WORD_SIZE-1:0] block_in,
-    input  wire                         block_dirty_in,
-    input  wire [INDEX_SIZE-1:0]        block_index_in,
-    input  wire [TAG_SIZE-1:0]          block_tag_in,
+    input  wire write_request,
+    input  wire [BLOCK_SIZE*WORD_WIDTH-1:0] block_in,
+    input  wire block_dirty_in,
+    input  wire [INDEX_SIZE-1:0] block_index_in,
+    input  wire [TAG_WIDTH-1:0] block_tag_in,
+    input  wire evict_ready,
 
-    output reg  [7:0]                   byte_out,      
-    output reg  [ADDR_SIZE-1:0]         addr_out,
-    output reg                          evict_valid,
-    input  wire                         evict_ready,
-
-    output wire                         buffer_empty,
-    output wire                         buffer_full
+    output reg  [7:0] byte_out,      
+    output reg  [ADDR_WIDTH-1:0] addr_out,
+    output reg  evict_valid, //used to indicate to the RAM that the evicted data is ready to be written to the 
+    output wire buffer_empty,
+    output wire buffer_full
 );
 
     // pointer widths
@@ -79,9 +237,9 @@ module write_back_buffer #(
     localparam COUNT_BITS = $clog2(BUFFER_SIZE + 1);
 
     // Storage arrays
-    reg [BLOCK_SIZE*WORD_SIZE-1:0] data_buffer [0:BUFFER_SIZE-1];
+    reg [BLOCK_SIZE*WORD_WIDTH-1:0] data_buffer [0:BUFFER_SIZE-1];
     reg [INDEX_SIZE-1:0]          index_buffer[0:BUFFER_SIZE-1];
-    reg [TAG_SIZE-1:0]            tag_buffer  [0:BUFFER_SIZE-1];
+    reg [TAG_WIDTH-1:0]            tag_buffer  [0:BUFFER_SIZE-1];
     reg                           dirty_buffer[0:BUFFER_SIZE-1];
 
     // FIFO control
@@ -120,7 +278,7 @@ module write_back_buffer #(
             // -------------------------
             // ENQUEUE NEW BLOCK
             // -------------------------
-            if (write_request && (count != BUFFER_SIZE)) begin
+            if (write_request && (count != BUFFER_SIZE) && block_dirty_in) begin
                 data_buffer[head_ptr]  <= block_in;
                 index_buffer[head_ptr] <= block_index_in;
                 tag_buffer[head_ptr]   <= block_tag_in;
@@ -142,7 +300,7 @@ module write_back_buffer #(
             //draining logic 
             if (draining) begin
                 reg [15:0] selected_word;
-                selected_word = data_buffer[tail_ptr][ (word_pointer*WORD_SIZE) +: WORD_SIZE ];
+                selected_word = data_buffer[tail_ptr][ (word_pointer*WORD_WIDTH) +: WORD_WIDTH ];
 
                 byte_out <= (byte_pointer == 1'b0)
                             ? selected_word[7:0]    // low byte// high byte
@@ -158,7 +316,7 @@ module write_back_buffer #(
 
                 evict_valid <= 1'b1;
 
-                if (evict_ready) begin //memory is ready to recieve another byte 
+                if (evict_ready) begin //memory has acknowledged byte and is ready to recieve another byte 
                     // -------------------------
                     // ADVANCE POINTERS
                     // -------------------------
@@ -191,97 +349,18 @@ endmodule
 
 
 
-module cache_controller #( 
-    parameter
-            BLOCK_SIZE = 8,  
-            WORD_SIZE = 16, 
-            ADDR_SIZE = 16, 
-            BLOCK_OFFSET_SIZE = 3, 
-            WORD_OFFSET_SIZE = 1,  
-            TAG_SIZE = 4, 
-            SET_INDEX_SIZE = 8, 
-            WB_BUFFER_SIZE = 4 
-)
-(
-    input clk, reset, 
-
-
-    //controller <=> cpu  
-    input [ADDR_SIZE-1:0] cpu_addr_in, 
-    input cpu_req_type, //read = 0, write = 1 
-    input [WORD_SIZE-1:0] cpu_data_in, //write data from CPU
-    input cpu_req_valid, //request is valid 
-    output [WORD_SIZE-1:0] cpu_data_out,  //read data to cpu
-    output cpu_data_ready,  //indicates data going to the cpu is ready
-
-
-    //controller <=> main store
-    input  [WORD_SIZE-1:0] mem_data_in, //read data from memory
-    output mem_write_enable, mem_read_enable,  
-    output [WORD_SIZE-1:0] mem_data_out
-
-); 
-    //controller <=> cache
-    wire [BLOCK_OFFSET_SIZE-1:0] block_offset; 
-    wire [WORD_OFFSET_SIZE-1:0] word_offset;  
-    wire [SET_INDEX_SIZE-1:0] set_index;
-    wire [TAG_SIZE-1:0] tag_bits; 
-
-    //controller <=> memory-block-buffer
-    wire [(BLOCK_SIZE*WORD_SIZE)-1:0] mem_block_data; 
-    reg flush_buffer; 
-    wire buffer_full, buffer_empty; 
-
-
-    //assignments 
-    assign block_offset = cpu_addr_in[3:1]; 
-    assign word_offset = cpu_addr_in[0]; 
-    assign set_index = cpu_addr_in[11:4]; 
-    assign tag_bits = cpu_addr_in[15:12]; 
-
-
-    //module instantiation (buffers and cache)
-    block_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_SIZE(WORD_SIZE))  BUFFER(
-        .clk(clk), .flush_buffer(flush_buffer), 
-        .word_in(mem_data_in), 
-        .block_out(mem_block_data), 
-        .buffer_full(buffer_full), 
-        .buffer_empty(buffer_empty)
-    ); 
-
-    write_back_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_SIZE(WORD_SIZE), .BUFFER_SIZE(WB_BUFFER_SIZE)) WB_BUFFER(
-
-    ); 
-
-    cache #(.BLOCK_SIZE(BLOCK_SIZE), .INDEX_WIDTH(SET_INDEX_SIZE), .TAG_WIDTH(TAG_SIZE), .DATA_WIDTH(WORD_SIZE), .BLOCK_OFFSET_WIDTH(BLOCK_OFFSET_SIZE), .WORD_OFFSET_WIDTH(WORD_OFFSET_SIZE))
-    CACHE(
-
-    ); 
-
-    //control logic 
-
-    always @(posedge clk, posedge reset)
-    begin 
-
-
-    end 
-
-endmodule 
-
-
-
 
 module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WIDTH =16, WORD_OFFSET_WIDTH = 3) (
-    input clk, reset, write_enabled, read_enabled, replace_request, 
+    input clk, reset, write_enabled, replace_request, 
     input [INDEX_WIDTH-1:0] set_index, 
     input [TAG_WIDTH-1:0] input_tag, 
     input [WORD_WIDTH-1:0] write_data_word,
     input [(WORD_WIDTH*BLOCK_SIZE)-1:0] write_data_block, 
     input [WORD_OFFSET_WIDTH-1:0] word_offset, //selects particular word in block 
     output [WORD_WIDTH-1:0] read_data_word,
-    output [(WORD_WIDTH*BLOCK_SIZE)-1:0] read_data_block, evicted_data_block, 
+    output [(WORD_WIDTH*BLOCK_SIZE)-1:0] evicted_data_block, 
     output [TAG_WIDTH-1:0] evict_tag, 
-    output evict_flag, evict_dirty, data_ready, miss
+    output evict_flag, evict_dirty, miss
 ); 
     localparam DATA_WIDTH = WORD_WIDTH*BLOCK_SIZE; 
     localparam SET_N = 2**INDEX_WIDTH;
@@ -294,6 +373,7 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
     wire [SET_N-1:0] evict_dirty_set; 
     wire [SET_N-1:0] miss_set; 
     wire [SET_N-1:0] set_select; 
+    wire [DATA_WIDTH-1:0] read_data_block; 
 
     //output data muxes
     reg_mux #(.REG_N(SET_N), .WIDTH(DATA_WIDTH))  READ_DATA_MUX(.in(read_data_block_set), .select(set_index), .out(read_data_block));
