@@ -17,19 +17,19 @@ module cache_controller #(
         WB_BUFFER_SIZE = 4 
 )
 (
-    localparam DATA_WIDTH = BLOCK_SIZE*WORD_WIDTH; 
-    input clk, reset, 
+    
+    input clk, reset,  
 
     //controller <=> cpu  
     input [ADDR_WIDTH-1:0] cpu_addr_in, 
-    input cpu_req_type, //read = 0, write = 1 
+    input cpu_req_read, 
+    input cpu_req_write, 
     input cpu_req_ready, //indicates the cpu request data is ready and valid
     input [WORD_WIDTH-1:0] cpu_data_in, //write data from CPU
-    input cpu_req_valid, //request is valid 
-    output [WORD_WIDTH-1:0] cpu_data_out,  //read data to cpu
-    output cpu_data_ready,  //indicates data going to the cpu is ready
-    output cpu_stall_req, //requests that the cpu should stall 
-
+    output reg [WORD_WIDTH-1:0] cpu_data_out,  //read data to cpu
+    output reg cpu_data_ready,  //indicates data going to the cpu is ready
+    output reg cpu_stall_req, //requests that the cpu should stall 
+    output reg cpu_req_invalid, // request made by the CPU is invalid 
 
     //controller <=> main store
     input  [7:0] mem_data_in, //read data from memory
@@ -39,6 +39,12 @@ module cache_controller #(
     output mem_data_ready, //indicates that data going into the memory is ready. 
     input mem_ack //memory has acknowledged data transfer
 ); 
+    localparam DATA_WIDTH = BLOCK_SIZE*WORD_WIDTH; 
+    localparam IDLE_STATE = 4'b0000; 
+    localparam COMPARE_TAG_STATE = 4'b0001
+    localparam WRITE_ALLOCATE_STATE = 4'b0010; 
+    localparam WRITE_BACK_STATE = 4'b0011; 
+    
 
 
     //controller <=> cache
@@ -114,6 +120,7 @@ module cache_controller #(
 
     cache #(.BLOCK_SIZE(BLOCK_SIZE), .INDEX_WIDTH(SET_INDEX_SIZE), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH))
     CACHE(
+        //inputs 
         .clk(clk), 
         .reset(reset), 
         .write_enabled(cache_write_enabled), 
@@ -123,6 +130,7 @@ module cache_controller #(
         .write_data_word(cache_write_data_word), 
         .write_data_block(cache_write_data_block), 
         .word_offset(cache_word_offset), 
+        //outputs 
         .read_data_word(cache_read_data_word), 
         .evicted_data_block(cache_evict_data), 
         .evict_tag(cache_evict_data), 
@@ -131,24 +139,107 @@ module cache_controller #(
         .miss(cache_miss)
     ); 
 
-
+    //assignments 
+    assign word_offset = cpu_addr_in[3:1]; 
+    assign byte_offset = cpu_addr_in[0]; 
+    assign set_index = cpu_addr_in[11:4]; 
+    assign tag_bits = cpu_addr_in[15:12]; 
+    
 
     //control logic 
+    reg current_state; 
 
     always @(posedge clk, posedge reset)
     begin 
+        case current_state
+            IDLE_STATE: 
+                begin 
+                    if(cpu_req_ready)
+                        begin
+                            //pull data ready low
+                            cpu_data_ready <= 0; 
+                            //send request to the cache
+                            cache_tag_bits <= tag_bits; 
+                            cache_set_index <= set_index; 
+                            cache_word_offset <= word_offset; 
+                            cache_replace_request <= 0; 
+                            cache_write_data_block <= 0; 
+                            if(cpu_req_read)
+                                begin 
+                                    cache_write_enabled <= 1'b0;
+                                    cache_write_data_word <= 0;   
+                                    current_state <= COMPARE_TAG_STATE; 
+                                end 
+                            else if(cpu_req_write)
+                                begin 
+                                    cache_write_enabled <= 1'b1; 
+                                    cache_write_data_word <= cpu_data_in; 
+                                    current_state <= COMPARE_TAG_STATE; 
+                                end
+                            else if(cpu_req_read & cpu_req_write) //invalid state
+                                begin 
+                                    current_state <= IDLE_STATE; 
+                                    cpu_req_invalid <= 1'b1; 
+                                end 
+                            //if both cpu_req_read and cpu_req_write are both low, this indicates a no-op, cache remains idle 
+                        end 
+                end
+
+            COMPARE_TAG_STATE:
+                begin
+                    //handle cache miss
+                    if(cache_miss)
+                        begin 
+                            cpu_stall_req <= 1'b1; 
+                            cpu_data_ready <= 1'b0; 
+                            //handle write miss 
+                            if(cpu_req_write)
+                                begin 
+                                    //issue a replace request to the cache
+                                    cache_replace_request <= 1'b1;
+                                    current_state <= WRITE_BACK_STATE; 
+                                end 
+                            else //handle read miss
+                                //request data from memory 
+                                current_state <= WRITE_ALLOCATE_STATE;
+                        end
+                    else //handle cache hit 
+                        begin 
+                            cpu_data_out <= cache_read_data_word; 
+                            cpu_data_ready <= 1'b1; 
+                            cpu_stall_req <= 1'b0; 
+                            cpu_req_invalid <= 1'b0; 
+                            current_state <= IDLE_STATE; 
+                        end 
+                end   
+
+            WRITE_ALLOCATE_STATE: 
+                begin 
+
+                end 
+
+            WRITE_BACK_STATE: 
+                begin 
+
+                end
+        endcase
+    end 
 
 
+    always @(posedge reset)
+    begin 
+        if(reset)
+            begin
+                current_state <= IDLE_STATE;  
+            end 
     end 
 endmodule
 
 
-    // //assignments 
-    // assign block_offset = cpu_addr_in[3:1]; 
-    // assign word_offset = cpu_addr_in[0]; 
-    // assign set_index = cpu_addr_in[11:4]; 
-    // assign tag_bits = cpu_addr_in[15:12]; 
+    
+module memory_arbiter(); 
 
+endmodule
 
 module block_buffer #(
     parameter BLOCK_SIZE = 8,       // number of 16-bit words
