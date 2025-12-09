@@ -6,10 +6,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 
-//@todo
-//figure out scheme where wbb and mbb control thier access to the main store without intervention from the cache controller. 
-//for wbb cache controller just needs to push in the evicted block and the set index of the block, wbb will generate the memory address and handle memory access 
-//for mbb cache controller just needs to send in the block address, mbb handles byte level access. 
 
 
 module cache_controller #( 
@@ -44,12 +40,26 @@ module cache_controller #(
     output mem_req_valid, //indicates that data going into the memory is ready. 
     input mem_ack //memory has acknowledged data transfer
 ); 
+    ////////////////////////////////////////////
+    //CONTANTS
+    ///////////////////////////////////////////
     localparam DATA_WIDTH = BLOCK_SIZE*WORD_WIDTH; 
     localparam IDLE_STATE = 4'b0000; 
     localparam COMPARE_TAG_STATE = 4'b0001;
     localparam WRITE_ALLOCATE_STATE = 4'b0010; 
     localparam WRITE_BACK_STATE = 4'b0011; 
-    
+
+    /////////////////////////////////////////////
+    //CONTROLER SIGNALS
+    ////////////////////////////////////////////
+    wire [WORD_OFFSET_WIDTH-1:0] word_offset; 
+    wire byte_offset; 
+    wire [SET_INDEX_SIZE-1:0] set_index; 
+    wire [TAG_WIDTH-1:0] tag_bits; 
+    reg evict_hold_valid;
+    reg [DATA_WIDTH-1:0]   evict_hold_data;
+    reg [TAG_WIDTH-1:0]    evict_hold_tag;
+    reg [SET_INDEX_SIZE-1:0] evict_hold_index;
 
     ///////////////////////////////////////
     //CACHE SIGNALS
@@ -73,9 +83,8 @@ module cache_controller #(
     //////////////////////////////////////
         //controller <=> memory-block-buffer
         wire [DATA_WIDTH-1:0] mbb_block_out;
-        reg mbb_block_addr; 
-        reg mbb_write_alloc_req; 
-        wire mbb_block_out; 
+        reg [ADDR_WIDTH-1:0] mbb_block_addr; 
+        reg mbb_write_alloc_req;
         wire mbb_data_ready; 
         //memory-block-buffer <=> arbiter 
         wire mbb_data_req; 
@@ -95,7 +104,7 @@ module cache_controller #(
     //////////////////////////////////
         //controller <=> write-back-buffer 
         reg [DATA_WIDTH-1:0] wbb_block_in; 
-        reg [INDEX_WIDTH-1:0] wbb_block_index; 
+        reg [SET_INDEX_SIZE-1:0] wbb_block_index; 
         reg [TAG_WIDTH-1:0] wbb_tag_in; 
         reg wbb_write_request; 
         wire wbb_buffer_full, wbb_buffer_empty;   
@@ -107,23 +116,34 @@ module cache_controller #(
 
 
     //module instantiation (buffers and cache)
-    block_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_WIDTH(WORD_WIDTH))  
+    block_buffer #(
+        .BLOCK_SIZE(BLOCK_SIZE), 
+        .WORD_WIDTH(WORD_WIDTH), 
+        .ADDR_WIDTH(ADDR_WIDTH)
+    )  
     MB_BUFFER(
         .clk(clk), 
         .reset(reset), 
         .mem_data_ack(arbiter_mem_ack),   
         .mem_access_grant(mbb_grant),   
         .byte_in(arbiter_mem_data_out),     
-        .wrt_alloc_req(write_alloc_req),      
+        .wrt_alloc_req(mbb_write_alloc_req),      
         .block_address(mbb_block_addr),
-        .mem_data_req(mbb_data_req),        // request a memory read
+        .mem_data_req(mbb_data_req),        // request a memory read to memory arbiter
         .mem_data_addr(mbb_data_addr), // data request address 
         .block_out(mbb_block_out),
         .block_data_ready(mbb_data_ready)
     ); 
 
 
-    write_back_buffer #(.BLOCK_SIZE(BLOCK_SIZE), .WORD_WIDTH(WORD_WIDTH), .BUFFER_SIZE(WB_BUFFER_SIZE), .ADDR_WIDTH(ADDR_WIDTH), .INDEX_SIZE(SET_INDEX_SIZE), .TAG_WIDTH(TAG_WIDTH)) 
+    write_back_buffer #(
+        .BLOCK_SIZE(BLOCK_SIZE), 
+        .WORD_WIDTH(WORD_WIDTH), 
+        .BUFFER_SIZE(WB_BUFFER_SIZE), 
+        .ADDR_WIDTH(ADDR_WIDTH), 
+        .INDEX_SIZE(SET_INDEX_SIZE), 
+        .TAG_WIDTH(TAG_WIDTH)
+    ) 
     WB_BUFFER(
         .clk(clk), 
         .reset(reset),
@@ -133,14 +153,16 @@ module cache_controller #(
         .block_tag_in(wbb_tag_in), 
         .byte_out(wbb_data), 
         .addr_out(wbb_data_addr), 
-        .mem_data_req(wbb_data_req)
+        .mem_data_req(wbb_data_req),
         .mem_access_grant(wbb_grant), 
         .mem_data_ack(arbiter_mem_ack), 
         .buffer_empty(wbb_buffer_empty), 
         .buffer_full(wbb_buffer_full)
     ); 
     
-    memory_arbiter #(.ADDR_WIDTH(ADDR_WIDTH)) 
+    memory_arbiter #(
+        .ADDR_WIDTH(ADDR_WIDTH)
+    ) 
     ARBITER(
         .clk(clk),
         .reset(reset),
@@ -162,7 +184,13 @@ module cache_controller #(
         .wbb_grant(wbb_grant)
     ); 
 
-    cache #(.BLOCK_SIZE(BLOCK_SIZE), .INDEX_WIDTH(SET_INDEX_SIZE), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH))
+    cache #(
+        .BLOCK_SIZE(BLOCK_SIZE), 
+        .INDEX_WIDTH(SET_INDEX_SIZE), 
+        .TAG_WIDTH(TAG_WIDTH), 
+        .WORD_WIDTH(WORD_WIDTH), 
+        .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH)
+    )
     CACHE(
         //inputs 
         .clk(clk), 
@@ -195,83 +223,143 @@ module cache_controller #(
 
     always @(posedge clk, posedge reset)
     begin 
+        cache_write_enabled   <= 0;
+        cache_replace_request <= 0;
+        mbb_write_alloc_req   <= 0;
+        wbb_write_request     <= 0;
+        cpu_data_ready        <= 0;
+        cpu_req_invalid       <= 0;
         if(reset)
             begin
+                //reset state 
                 current_state <= IDLE_STATE;  
+                //reset registers
+                cache_replace_request <= 1'b0; 
+                cache_write_data_block <= 1'b0; 
+                cache_write_data_word <= 1'b0;
+                cache_write_enabled <= 1'b0; 
+                mbb_write_alloc_req <= 1'b0; 
+                cpu_stall_req <= 1'b0; 
+                cpu_req_invalid <= 1'b0; 
+                cpu_data_ready <= 1'b0; 
+                wbb_write_request <= 1'b0; 
+                wbb_block_in <= '0;
+                wbb_tag_in <= '0; 
+                wbb_block_index <= '0; 
+                mbb_block_addr <= '0; 
+                evict_hold_valid <= 1'b0; 
+                evict_hold_data <= '0
+                evict_hold_tag <= '0
+                evict_hold_index <= '0
             end 
         else
             begin 
-                case current_state
+                case(current_state)
                     IDLE_STATE: 
                         begin 
                             if(cpu_req_ready)
                                 begin
-                                    //pull data ready low
-                                    cpu_data_ready <= 0; 
+                                    //reset registers
+                                    cpu_data_ready <= 1'b0;  
                                     //send request to the cache
                                     cache_tag_bits <= tag_bits; 
                                     cache_set_index <= set_index; 
                                     cache_word_offset <= word_offset; 
-                                    cache_replace_request <= 0; 
-                                    cache_write_data_block <= 0; 
-                                    if(cpu_req_read)
-                                        begin 
-                                            cache_write_enabled <= 1'b0;
-                                            cache_write_data_word <= 0;   
-                                            current_state <= COMPARE_TAG_STATE; 
-                                        end 
-                                    else if(cpu_req_write)
-                                        begin 
-                                            cache_write_enabled <= 1'b1; 
-                                            cache_write_data_word <= cpu_data_in; 
-                                            current_state <= COMPARE_TAG_STATE; 
-                                        end
-                                    else if(cpu_req_read & cpu_req_write) //invalid state
-                                        begin 
-                                            current_state <= IDLE_STATE; 
-                                            cpu_req_invalid <= 1'b1; 
-                                        end 
-                                    //if both cpu_req_read and cpu_req_write are both low, this indicates a no-op, cache remains idle 
+                                    current_state <= COMPARE_TAG_STATE; 
                                 end 
                         end
 
                     COMPARE_TAG_STATE:
                         begin
-                            //handle cache miss
                             if(cache_miss)
                                 begin 
-                                    cpu_stall_req <= 1'b1; 
-                                    cpu_data_ready <= 1'b0; 
-                                    //handle write miss 
-                                    if(cpu_req_write)
-                                        begin 
-                                            //issue a replace request to the cache
-                                            cache_replace_request <= 1'b1;
-                                            current_state <= WRITE_BACK_STATE; 
-                                        end 
-                                    else //handle read miss
-                                        //request data from memory 
-                                        current_state <= WRITE_ALLOCATE_STATE;
+                                    cpu_stall_req <= 1'b1;  
+                                    cache_replace_request <= 1'b1;
+                                    current_state <= WRITE_BACK_STATE; 
                                 end
-                            else //handle cache hit 
+                            else
                                 begin 
-                                    cpu_data_out <= cache_read_data_word; 
+                                    if(cpu_req_read & cpu_req_write) //invalid state
+                                    begin 
+                                        cpu_req_invalid <= 1'b1; 
+                                        cache_write_enabled <= 1'b0; 
+                                    end 
+                                    else if(cpu_req_read)
+                                        begin 
+                                            cpu_req_invalid <= 1'b0; 
+                                            cache_write_enabled <= 1'b0; 
+                                            cpu_data_out <= cache_read_data_word; 
+                                        end 
+                                    else if(cpu_req_write)
+                                        begin 
+                                            cache_write_enabled <= 1'b1; 
+                                            cache_write_data_word <= cpu_data_in; 
+                                            cpu_req_invalid <= 1'b0; 
+                                        end
+                                 
                                     cpu_data_ready <= 1'b1; 
                                     cpu_stall_req <= 1'b0; 
-                                    cpu_req_invalid <= 1'b0; 
+                                    cache_replace_request <= 1'b0; 
                                     current_state <= IDLE_STATE; 
                                 end 
                         end   
 
                     WRITE_ALLOCATE_STATE: 
                         begin 
-                            
+                            if(mbb_data_ready)
+                                begin 
+                                    mbb_write_alloc_req <= 1'b0; 
+                                    cache_replace_request <= 1'b1; 
+                                    cache_write_data_block <= mbb_block_out; 
+                                    cache_tag_bits <= tag_bits; 
+                                    current_state <= COMPARE_TAG_STATE; 
+                                end 
+                            else
+                                begin 
+                                    mbb_write_alloc_req <= 1'b1; 
+                                    mbb_block_addr <= {tag_bits, set_index,{WORD_OFFSET_WIDTH{1'b0}},1'b0}; 
+                                end
                         end 
 
                     WRITE_BACK_STATE: 
-                        begin 
+                        begin
+                            if (!evict_hold_valid) //no evicted data in register 
+                                begin
+                                    if (cache_evict_flag && cache_evict_dirty) 
+                                        begin
+                                            evict_hold_valid <= 1'b1;
+                                            evict_hold_data  <= cache_evict_data;
+                                            evict_hold_tag   <= cache_evict_tag;
+                                            evict_hold_index <= cache_set_index;
+                                            current_state <= WRITE_BACK_STATE;
+                                        end
+                                    else 
+                                        begin
+                                            current_state <= WRITE_ALLOCATE_STATE;
+                                        end
+                                end
+                            else begin
+                                if (!wbb_buffer_full) 
+                                    begin
+                                        wbb_block_in     <= evict_hold_data;
+                                        wbb_tag_in       <= evict_hold_tag;
+                                        wbb_block_index  <= evict_hold_index;
+                                        wbb_write_request<= 1'b1;
 
+                                        // Clear hold slot
+                                        evict_hold_valid <= 1'b0;
+
+                                        // Proceed to allocate
+                                        current_state <= WRITE_ALLOCATE_STATE;
+                                    end
+                                else 
+                                    begin
+                                        current_state <= WRITE_BACK_STATE; //if wbb full stay in state 
+                                    end
+                            end
                         end
+
+                    default: current_state <= IDLE_STATE; 
                 endcase
             end 
     end  
@@ -439,7 +527,6 @@ module block_buffer #(
                             begin
                                 if (mem_access_grant) 
                                     begin
-                                        mem_data_req <= 0;
                                         current_state <= STATE_B;
                                     end
                                 else 
@@ -453,6 +540,7 @@ module block_buffer #(
                             begin
                                 if (mem_data_ack) 
                                     begin
+                                        mem_data_req  <= 1'b0; //de-assert arbiter req after memory has acknowledged
                                         base = word_ptr * WORD_WIDTH;
 
                                         // Write correct byte of the word
@@ -509,7 +597,7 @@ module write_back_buffer #(
     output reg  [ADDR_WIDTH-1:0] addr_out,
     output reg  mem_data_req, 
     output reg buffer_empty,
-    output reg buffer_full,
+    output reg buffer_full
 );
 
     // FIFO pointer widths
@@ -596,15 +684,16 @@ module write_back_buffer #(
                         };
 
 
-                        // Only assert req when not waiting
+                        // Asser memory request 
                         if (!mem_access_grant)
                             mem_data_req <= 1'b1; 
-                        else
-                            mem_data_req <= 1'b0;
+                        
+                            
 
                         // memory accepted this byte
                         if (mem_access_grant && mem_data_ack) 
                             begin
+                                mem_data_req <= 1'b0;
                                 if (byte_pointer == 0)
                                     byte_pointer <= 1;
                                 else 
@@ -673,7 +762,7 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
 
         for(i = 0; i < SET_N; i = i+1)
             begin 
-                set #(.SET_WIDTH(SET_WIDTH), .DATA_WIDTH(DATA_WIDTH), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH)) SET(
+                set #(.SET_WIDTH(SET_WIDTH), .DATA_WIDTH(DATA_WIDTH), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH)) SET(
                     .clk(clk), 
                     .reset(reset), 
                     .replace_request(replace_request), 
