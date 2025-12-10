@@ -56,9 +56,9 @@ module tournament_predictor_3 #(
                 local_rollback_enabled  <= 1'b0;
             end
             // normally update predictors at branch resolution
-            gshare_write_enabled  <= 1'b1;
-            bimodal_write_enabled <= 1'b1;
-            local_write_enabled   <= 1'b1;
+            gshare_write_enabled  <= write_enabled;
+            bimodal_write_enabled <= write_enabled;
+            local_write_enabled   <= write_enabled;
         end
     end
 

@@ -15,10 +15,10 @@ module bimodal_predictor #(parameter INDEX_LEN =7, parameter TAG_LEN = 7 )(
 
 	wire [1:0] count; 
 	wire tag_not_added; 
-	wire [INDEX_LEN-1:0] index_read  = pc_bits_read[8:2];
-	wire [INDEX_LEN-1:0] index_write = pc_bits_write[8:2]; 
-	wire [TAG_LEN-1:0] tag_read = pc_bits_read[15:9];
-	wire [TAG_LEN-1:0] tag_write = pc_bits_write[15:9];
+	wire [INDEX_LEN-1:0] index_read  = pc_bits_read[2 +: INDEX_LEN];
+	wire [INDEX_LEN-1:0] index_write = pc_bits_write[2 +: INDEX_LEN]; 
+	wire [TAG_LEN-1:0] tag_read = pc_bits_read[15 -: TAG_LEN];
+	wire [TAG_LEN-1:0] tag_write = pc_bits_write[15 -: TAG_LEN];
 	
 	assign prediction = tag_not_added? 1'b0 : count[1]; 
 	

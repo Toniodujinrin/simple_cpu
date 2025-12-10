@@ -11,8 +11,8 @@ module local_history_table #(parameter INDEX_LEN = 7, HISTORY_LEN = 10)
 	input clk, prediction, reset, rollback_enabled, predict_enable, 
 	input [INDEX_LEN-1:0] pc_bits_read, 
 	input [INDEX_LEN-1:0] pc_bits_write,
-	input [HISTORY_LEN-1:0] history_write 
-	output [HISTORY_LEN-1:0] history_read, 
+	input [HISTORY_LEN-1:0] history_write, 
+	output [HISTORY_LEN-1:0] history_read
 ); 
 	 
 
@@ -23,7 +23,7 @@ module local_history_table #(parameter INDEX_LEN = 7, HISTORY_LEN = 10)
 	wire [LOCATIONS-1:0] out_bits; //not used 
 	wire [LOCATIONS-1:0] history_select_write;
 	wire [LOCATIONS-1:0] history_select_read; 
-	wire [VALUES_WIRES_LENGTH-1:0] values; 
+	wire [VALUE_WIRES_LENGTH-1:0] values; 
 	
 
 	//decodes pc bits into 1 hot addresses, this 1 hot address will be used to select the history register for writing 
@@ -69,36 +69,7 @@ endmodule
  
 
 
-module shift_reg_n #(parameter WIDTH = 10)
-(
-	input in, reset, clk, shift_enabled, p_load_enabled, 
-	input [WIDTH-1:0] load, 
-	output out, 
-	output wire [WIDTH-1:0]  value
-); 
 
-
-	wire [WIDTH-1:0] ff_out; 
-	
-	assign value = ff_out; 
-	assign out = ff_out[WIDTH-1]; 
-	genvar i; 
-	generate
-	for(i=0; i < WIDTH; i = i+1) 
-		begin
-			
-			d_ff  D_FF(
-				.clk(clk),
-				.d(shift_enabled?	(i==0 ? in: ff_out[i-1]):
-					p_load_enabled? load[i]:
-									f_out[i]),
-				.q(ff_out[i]),
-				.reset(reset)
-			);
-		end
-	endgenerate 
-
-endmodule 
 
 
 

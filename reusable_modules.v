@@ -56,3 +56,34 @@ module register(clk,in, out, write_selected, write_enabled, reset);
 		end 
 	endgenerate 
 endmodule 
+
+module shift_reg_n #(parameter WIDTH = 10)
+(
+	input in, reset, clk, shift_enabled, p_load_enabled, 
+	input [WIDTH-1:0] load, 
+	output out, 
+	output wire [WIDTH-1:0]  value
+); 
+
+
+	wire [WIDTH-1:0] ff_out; 
+	
+	assign value = ff_out; 
+	assign out = ff_out[WIDTH-1]; 
+	genvar i; 
+	generate
+	for(i=0; i < WIDTH; i = i+1) 
+		begin
+			
+			d_ff  D_FF(
+				.clk(clk),
+				.d(p_load_enabled? load[i]:
+				shift_enabled?	(i==0 ? in: ff_out[i-1]):
+									ff_out[i]),
+				.q(ff_out[i]),
+				.reset(reset)
+			);
+		end
+	endgenerate 
+
+endmodule 

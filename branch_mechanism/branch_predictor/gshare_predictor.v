@@ -31,8 +31,8 @@ module gshare_predictor #(
     wire out_bit;
 
     // Masked index generation (PC XOR GHR)
-    assign index_read  = (history_read  ^ pc_bits_read[9:2]);
-    assign index_write = (history_write ^ pc_bits_write[9:2]);
+    assign index_read  = (history_read  ^ pc_bits_read[2 +: HISTORY_LEN]);
+    assign index_write = (history_write ^ pc_bits_write[2 +: HISTORY_LEN]);
 
     // Prediction = MSB of 2-bit counter
     assign prediction = count[1];

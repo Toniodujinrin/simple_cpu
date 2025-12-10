@@ -12,7 +12,7 @@ module branch_history_table #(parameter INDEX_LEN = 7, parameter TAG_LEN = 7) (
     input [INDEX_LEN-1:0] index_read,
     input [INDEX_LEN-1:0] index_write,  
     input increment_decrement, clk, reset, write_enabled,
-    output [COUNT_LEN-1:0] count,
+    output [1:0] count,
     output tag_not_added
 ); 
     
@@ -80,13 +80,12 @@ module set_2_way #(parameter TAG_LEN = 7)
    (
     input  clk, set_selected_read, set_selected_write, reset, write_enabled, increment_decrement, 
     input  [TAG_LEN-1:0] tag_in_read, tag_in_write,
-    output [SAT_COUNT_SIZE-1:0] target_count, 
+    output [1:0] target_count, 
     output tag_not_added
    ); 
 
     // PARAMS 
     localparam WAY_N = 2; // must be 2 in this module
-    localparam SAT_COUNT_SIZE = 2; 
     localparam PLRU_DEFAULT = 1'b0; 
 
     wire tag_not_added_read; 
@@ -247,37 +246,4 @@ endmodule
 
 
 
-module sat_counter_2bit (clk, reset, enabled, in, count);
-     parameter DEFAULT_VALUE = 2'b01; 
-    input  wire clk;
-    input  wire reset;  // reset all counters (system reset)
-    input  wire enabled;
-    input  wire in;             // 1 = increment, 0 = decrement
-    output reg  [1:0] count; 
 
-    always @(posedge clk or posedge reset) begin
-        if (reset) 
-              begin
-                    count <= DEFAULT_VALUE; //"usually not taken" at startup
-              end 
-          else if (enabled) 
-              begin
-                    if (in) 
-                        begin
-                             if (count != 2'b11)
-                                  count <= count + 1;
-                             else 
-                                    count <= count; 
-                        end 
-                    else 
-                        begin
-                             if (count != 2'b00)
-                                  count <= count - 1;
-                              else 
-                                    count <= count; 
-                        end
-              end
-          else 
-                    count <= count; 
-    end
-endmodule
