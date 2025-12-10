@@ -1,11 +1,13 @@
 ///////////////////////////////////////////////////////////////////////////////
-// File:        ID_EX_reg.v
+// File:        cache.v
 // Author:      Toni Odujinrin
 // Date:        2025-11-02 
 // Description: 4-way set associative cache + controller with write-back, write-allocate policy  
 ///////////////////////////////////////////////////////////////////////////////
 
 
+//@Todo: remove the early replace in the COMPARE_TAG state in cache controller
+//modify the cache base to allow combinational read of the evicted data using the LRU  
 
 
 module cache_controller #( 
@@ -20,7 +22,8 @@ module cache_controller #(
 )
 (
     
-    input clk, reset,  
+    input clk, reset, 
+
     //controller <=> cpu  
     input [ADDR_WIDTH-1:0] cpu_addr_in, 
     input cpu_req_read, 
@@ -74,7 +77,7 @@ module cache_controller #(
     reg cache_replace_request; 
     wire [DATA_WIDTH-1:0] cache_evict_data;
     wire [TAG_WIDTH-1:0] cache_evict_tag; 
-    wire cache_evict_dirty, cache_evict_flag; 
+    wire cache_evict_dirty; 
     wire [WORD_WIDTH-1:0] cache_read_data_word; 
     wire cache_miss; 
      
@@ -206,7 +209,6 @@ module cache_controller #(
         .read_data_word(cache_read_data_word), 
         .evicted_data_block(cache_evict_data), 
         .evict_tag(cache_evict_tag), 
-        .evict_flag(cache_evict_flag), 
         .evict_dirty(cache_evict_dirty), 
         .miss(cache_miss)
     ); 
@@ -248,9 +250,9 @@ module cache_controller #(
                 wbb_block_index <= '0; 
                 mbb_block_addr <= '0; 
                 evict_hold_valid <= 1'b0; 
-                evict_hold_data <= '0
-                evict_hold_tag <= '0
-                evict_hold_index <= '0
+                evict_hold_data <= '0; 
+                evict_hold_tag <= '0; 
+                evict_hold_index <= '0; 
             end 
         else
             begin 
@@ -274,7 +276,6 @@ module cache_controller #(
                             if(cache_miss)
                                 begin 
                                     cpu_stall_req <= 1'b1;  
-                                    cache_replace_request <= 1'b1;
                                     current_state <= WRITE_BACK_STATE; 
                                 end
                             else
@@ -325,7 +326,7 @@ module cache_controller #(
                         begin
                             if (!evict_hold_valid) //no evicted data in register 
                                 begin
-                                    if (cache_evict_flag && cache_evict_dirty) 
+                                    if (cache_evict_dirty) 
                                         begin
                                             evict_hold_valid <= 1'b1;
                                             evict_hold_data  <= cache_evict_data;
@@ -729,7 +730,7 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
     output [WORD_WIDTH-1:0] read_data_word,
     output [(WORD_WIDTH*BLOCK_SIZE)-1:0] evicted_data_block, 
     output [TAG_WIDTH-1:0] evict_tag, 
-    output evict_flag, evict_dirty, miss
+    output evict_dirty, miss
 ); 
     localparam DATA_WIDTH = WORD_WIDTH*BLOCK_SIZE; 
     localparam SET_N = 2**INDEX_WIDTH;
@@ -738,7 +739,6 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
     wire [(SET_N*DATA_WIDTH)-1:0] read_data_block_set; //data from all the blocks into one packed array 
     wire [(SET_N*DATA_WIDTH)-1:0] evicted_data_block_set;
     wire [(SET_N*TAG_WIDTH)-1:0] evicted_tag_set;
-    wire [SET_N-1:0] evict_flag_set; 
     wire [SET_N-1:0] evict_dirty_set; 
     wire [SET_N-1:0] miss_set; 
     wire [SET_N-1:0] set_select; 
@@ -748,18 +748,15 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
     reg_mux #(.REG_N(SET_N), .WIDTH(DATA_WIDTH))  READ_DATA_MUX(.in(read_data_block_set), .select(set_index), .out(read_data_block));
     reg_mux #(.REG_N(SET_N), .WIDTH(DATA_WIDTH))  EVICTED_DATA_MUX(.in(evicted_data_block_set), .select(set_index), .out(evicted_data_block)); 
     reg_mux #(.REG_N(SET_N), .WIDTH(TAG_WIDTH))  EVICTED_TAG_MUX(.in(evicted_tag_set), .select(set_index), .out(evict_tag)); 
+    reg_mux #(.REG_N(SET_N), .WIDTH(1))  EVICTED_DIRTY_MUX(.in(evict_dirty_set), .select(set_index), .out(evict_dirty)); 
 	register_address_decoder #(.INPUT_WIDTH(INDEX_WIDTH)) DECODER(.in(set_index),.out(set_select));  
-    
     
     //assignments
     assign read_data_word = read_data_block[word_offset*WORD_WIDTH+:WORD_WIDTH]; 
     assign miss = |miss_set; 
-    assign evict_flag = |evict_flag_set; 
-    assign evict_dirty = |evict_dirty_set; 
 
     generate 
         genvar i; 
-
         for(i = 0; i < SET_N; i = i+1)
             begin 
                 set #(.SET_WIDTH(SET_WIDTH), .DATA_WIDTH(DATA_WIDTH), .TAG_WIDTH(TAG_WIDTH), .WORD_WIDTH(WORD_WIDTH), .WORD_OFFSET_WIDTH(WORD_OFFSET_WIDTH)) SET(
@@ -775,7 +772,6 @@ module cache  #(parameter BLOCK_SIZE = 8, INDEX_WIDTH = 8, TAG_WIDTH =4, WORD_WI
                     .data(read_data_block_set[i*DATA_WIDTH+:DATA_WIDTH]), 
                     .evict_data(evicted_data_block_set[i*DATA_WIDTH+:DATA_WIDTH]), 
                     .evict_tag(evicted_tag_set[i*TAG_WIDTH+:TAG_WIDTH]), 
-                    .evict_flag(evict_flag_set[i]),
                     .evict_dirty(evict_dirty_set[i]), 
                     .miss(miss_set[i])
                 ); 
@@ -798,7 +794,7 @@ module set #(
     input  wire [WORD_OFFSET_WIDTH-1:0] word_offset,
     output reg [DATA_WIDTH-1:0] data, evict_data,
     output reg [TAG_WIDTH-1:0] evict_tag,
-    output reg evict_dirty,evict_flag,
+    output reg evict_dirty,
     output wire miss
 );
 
@@ -807,20 +803,14 @@ module set #(
     // per-way arrays 
     wire [DATA_WIDTH-1:0]set_data      [0:SET_WIDTH-1];
     wire set_valid_bits [0:SET_WIDTH-1];
-    wire set_evict_dirty_bits [0:SET_WIDTH-1];
-    wire set_evict_flag [0:SET_WIDTH-1];
+    wire set_dirty_bits [0:SET_WIDTH-1]; 
     wire [TAG_WIDTH-1:0] set_tag_bits   [0:SET_WIDTH-1];
-    wire [TAG_WIDTH-1:0] set_evict_tag  [0:SET_WIDTH-1];
-    wire [DATA_WIDTH-1:0] set_evict_data[0:SET_WIDTH-1];
     wire [LRU_COUNT_SIZE-1:0] lru_count [0:SET_WIDTH-1];
     wire [SET_WIDTH-1:0] way_select_one_hot;
     reg  [LRU_COUNT_SIZE-1:0] lru_way;    
     wire tag_not_found;
 
-
-
     assign miss = set_selected & tag_not_found;
-
 
     way_selector #(.SET_WIDTH(SET_WIDTH), .TAG_WIDTH(TAG_WIDTH)) selector_i (
         .tag_in(tag_in),
@@ -832,27 +822,33 @@ module set #(
 
     //lru update logic (specific to 4 ways) 
     always @(*) 
-    begin 
-        if ((lru_count[0] < lru_count[1]) && 
-            (lru_count[0] < lru_count[2]) && 
-            (lru_count[0] < lru_count[3]) ) 
-            lru_way = 2'b00; 
-        else if( lru_count[1] < lru_count[2] && 
-                lru_count[1] < lru_count[3] ) 
-            lru_way = 2'b01; 
-        else if( lru_count[2] < lru_count[3] ) 
-            lru_way = 2'b10; 
-        else 
-            lru_way = 2'b11; 
+    begin
+        if(~set_valid_bits[0]) lru_way = 2'b00; 
+        else if(~set_valid_bits[1]) lru_way = 2'b01; 
+        else if(~set_valid_bits[2]) lru_way = 2'b10; 
+        else if(~set_valid_bits[3]) lru_way = 2'b11; 
+        else
+            begin
+                if ((lru_count[0] < lru_count[1]) && 
+                    (lru_count[0] < lru_count[2]) && 
+                    (lru_count[0] < lru_count[3]) ) 
+                    lru_way = 2'b00; 
+                else if( lru_count[1] < lru_count[2] && 
+                        lru_count[1] < lru_count[3] ) 
+                    lru_way = 2'b01; 
+                else if( lru_count[2] < lru_count[3] ) 
+                    lru_way = 2'b10; 
+                else 
+                    lru_way = 2'b11; 
+            end 
     end
 
-    // --- combinational muxes: select current data/evict_data/tag from the per-way arrays
+    //combinational muxes: select current data/evict_data/tag from the per-way arrays
     always @(*) begin
         data = {DATA_WIDTH{1'b0}};
         evict_data = {DATA_WIDTH{1'b0}};
         evict_tag  = {TAG_WIDTH{1'b0}};
         evict_dirty = 1'b0;
-        evict_flag = 1'b0;
         integer w; 
         for (w = 0; w < SET_WIDTH; w = w + 1) begin
             if (way_select_one_hot[w]) begin
@@ -860,10 +856,9 @@ module set #(
             end
             
             if (w == lru_way) begin
-                evict_data  = set_evict_data[w];
-                evict_tag   = set_evict_tag[w];
-                evict_dirty = set_evict_dirty_bits[w];
-                evict_flag  = set_evict_flag[w];
+                evict_data  = set_data[w];
+                evict_tag   = set_tag_bits[w];
+                evict_dirty = set_dirty_bits[w];
             end
         end
     end
@@ -885,15 +880,12 @@ module set #(
                 .way_selected( set_selected & ( replace_request ? (lru_way == i) : way_select_one_hot[i] ) ),
                 .data_in(data_in),
                 .word_in(word_in),
+                .dirty_bit(set_dirty_bits[i]),
                 .word_offset(word_offset),
                 .tag_in(tag_in),
                 .valid_bit(set_valid_bits[i]),
-                .evict_dirty(set_evict_dirty_bits[i]),
                 .data(set_data[i]),
-                .evict_data(set_evict_data[i]),
-                .evict_flag(set_evict_flag[i]),
                 .tag(set_tag_bits[i]),
-                .evict_tag(set_evict_tag[i]),
                 .lru_count(lru_count[i])
             );
         end
@@ -929,17 +921,16 @@ endmodule
 
 module way #(parameter DATA_WIDTH = 128, TAG_WIDTH = 4, SET_WIDTH = 4, LRU_COUNT_SIZE = 2, WORD_OFFSET_WIDTH = 3, WORD_WIDTH = 16) ( 
     input reset, clk, write_enabled, replace_request, way_selected, 
-    output reg valid_bit, evict_dirty, evict_flag, 
+    output reg valid_bit,
     input [DATA_WIDTH-1:0] data_in,
     input [WORD_WIDTH-1:0] word_in, 
     input [WORD_OFFSET_WIDTH-1:0] word_offset,
     input wire [TAG_WIDTH-1:0] tag_in, 
-    output reg [DATA_WIDTH-1:0] data, evict_data,
-    output reg [TAG_WIDTH-1:0] tag, evict_tag,
+    output reg [DATA_WIDTH-1:0] data,
+    output reg dirty_bit,
+    output reg [TAG_WIDTH-1:0] tag,
     output wire [LRU_COUNT_SIZE-1:0] lru_count
 ); 
-    
-    reg dirty_bit; 
     //Counter
     lru_counter #(.COUNTER_WIDTH(LRU_COUNT_SIZE)) LRU(
         .clk(clk), 
@@ -956,32 +947,16 @@ module way #(parameter DATA_WIDTH = 128, TAG_WIDTH = 4, SET_WIDTH = 4, LRU_COUNT
                 data      <= {DATA_WIDTH{1'b0}};
                 valid_bit <= 1'b0;
                 dirty_bit <= 1'b0;
-                evict_flag<= 1'b0;
-                evict_dirty<= 1'b0;
-                evict_data <= {DATA_WIDTH{1'b0}};
-                evict_tag  <= {TAG_WIDTH{1'b0}};
             end 
         else 
-            begin
-                evict_flag <= 1'b0;
-                evict_dirty <= 1'b0;
-                evict_data <= evict_data; 
-                evict_tag <= evict_tag;
-
-        
+            begin        
                 if (replace_request && way_selected) 
                     begin
-                        //evict old 
-                        evict_data  <= data;
-                        evict_tag   <= tag;
-                        evict_dirty <= dirty_bit;
                         // install new block
                         data        <= data_in;
                         tag         <= tag_in;
                         valid_bit   <= 1'b1;
                         dirty_bit   <= 1'b0;
-                        // evict flag indicates we have evicted a valid line
-                        evict_flag  <= valid_bit ? 1'b1 : 1'b0;
                     end 
                 else if (write_enabled && way_selected) 
                     begin
@@ -997,7 +972,7 @@ endmodule
 module lru_counter #(parameter COUNTER_WIDTH = 2)(
     input clk, reset, enabled, sync_reset, 
     output reg [COUNTER_WIDTH-1:0] count
-)
+);
     always @(posedge clk, posedge reset)
     begin 
         if(reset)
